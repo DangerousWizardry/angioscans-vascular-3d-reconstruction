@@ -1,8 +1,9 @@
+import copy
 import numpy as np
 from . import RunningAverage,NestedAverage,NetworkManagerArea
 
 class NetworkManager:
-    def __init__(self,depth,max_branch_id=None):
+    def __init__(self,depth,branch_list=None,max_branch_id=None):
         self.last_branch_id = 0
         self.network = list()
         self.debug = list()
@@ -13,7 +14,7 @@ class NetworkManager:
             self.debug.append(list())
         self.branch_target = [0]
         if max_branch_id is not None:
-            self.branch_list = list(range(max_branch_id+1))
+            self.branch_list = copy.deepcopy(branch_list)
             self.branch_length = [0] * (max_branch_id+1)
             self.last_branch_id=max_branch_id
         else:

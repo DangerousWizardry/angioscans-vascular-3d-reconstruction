@@ -214,7 +214,7 @@ class NetworkEngine:
         net = self.network_manager.network
         merged_branch_list = list()
         merged_to_branch_list = list()
-        result_network_manager = NetworkManager(len(self.image),self.network_manager.last_branch_id)
+        result_network_manager = NetworkManager(len(self.image),self.network_manager.branch_list,self.network_manager.last_branch_id)
 
         for depth in range(len(net)):
             nodes = net[depth]
@@ -266,3 +266,7 @@ class NetworkEngine:
                         contour = merge_contours(self.image[0],contours_to_merge)
                         result_network_manager.append_to_network(depth,nodes[key].branch_id,contour)
         return result_network_manager
+    
+    def segmentize(self,network):
+        #for i in range()
+        return False
