@@ -265,6 +265,9 @@ class NetworkEngine:
                         #print("at depth"+str(depth)+" merge "+str(nodes[key].branch_id)+" with"+str(debug_id))
                         contour = merge_contours(self.image[0],contours_to_merge)
                         result_network_manager.append_to_network(depth,nodes[key].branch_id,contour)
+        for branch_id in result_network_manager.branch_list:
+            if result_network_manager.branch_length[branch_id] < 30:
+                result_network_manager.remove_branch(branch_id)
         return result_network_manager
     
     def segmentize(self,network):
