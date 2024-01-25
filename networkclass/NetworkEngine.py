@@ -1,4 +1,5 @@
 from functools import partial
+from unittest import result
 
 from matplotlib import pyplot as plt
 from functions.contours_utils import contour_intersect, merge_contours
@@ -210,7 +211,7 @@ class NetworkEngine:
             self.explore_all()
         return
 
-    def merge_network(self):
+    def merge_network(self,DEBUG=False):
         net = self.network_manager.network
         merged_branch_list = list()
         merged_to_branch_list = list()
@@ -237,7 +238,7 @@ class NetworkEngine:
                 else:
                     for idb in range(len(nodes)):
                         if ida < idb :
-                            if contour_intersect(nodes[ida].contour,nodes[idb].contour):
+                            if contour_intersect(nodes[ida].contour,nodes[idb].contour,DEBUG):
                                 merged_branch_list.append(nodes[idb].branch_id)
                                 merged_to_branch_list.append(nodes[ida].branch_id)
                                 to_merge[ida].add(idb)
@@ -251,8 +252,8 @@ class NetworkEngine:
                                     local_branch_idb = next((i for i, item in enumerate(nodes) if item.branch_id == branch), None)
                                     if local_branch_idb is not None:
                                         to_merge[ida].add(local_branch_idb)
-                                
-                                print(str(nodes[idb].branch_id)+" merged to "+str(nodes[ida].branch_id))
+                                if DEBUG:
+                                    print(str(nodes[idb].branch_id)+" merged to "+str(nodes[ida].branch_id))
                 
                 for key, value in to_merge.items():
                     if len(value) == 0:
@@ -270,6 +271,60 @@ class NetworkEngine:
                 result_network_manager.remove_branch(branch_id)
         return result_network_manager
     
-    def segmentize(self,network):
-        #for i in range()
+
+    def find_parent_branch(self,contour,areas):
+        #  print("original")
+        #  print(contour)
+        #  print("compare to")
+        for area in areas:
+            #  print(area.contour)
+            if contour_intersect(contour,area.contour):
+                return area.branch_id
         return False
+
+
+    def segmentize(self,network_manager):
+        registered_branch = dict()
+        base_network = network_manager.network
+        result_network_manager = NetworkManager(len(base_network))
+        #We register the first branch
+        _,depth = network_manager.get_branch(0)
+        new_branch_id = result_network_manager.get_new_branch()
+        registered_branch[base_network[depth][0].branch_id] = new_branch_id
+        result_network_manager.append_to_network(depth,registered_branch[base_network[depth][0].branch_id],base_network[depth][0].contour)
+        
+        for depth in reversed(range(len(base_network)-1)):
+            #TODO double loop, first check suspected child, if validated child, exclude parent from standard rebranding
+            excluded = list()
+            for area_idx in range(len(base_network[depth])):
+                if base_network[depth][area_idx].branch_id not in registered_branch.keys():
+                    #Find where does this branch come
+                    parent_branch_id = self.find_parent_branch(base_network[depth][area_idx].contour,base_network[depth+1])
+                    print(parent_branch_id)
+                    if parent_branch_id == False:
+                        #Case branch has been explore from bottom
+                        print("Can't find parent for "+str(base_network[depth][area_idx].branch_id)+" at depth "+str(depth))
+                        new_branch_id = result_network_manager.get_new_branch()
+                        registered_branch[base_network[depth][area_idx].branch_id] = new_branch_id
+                        result_network_manager.append_to_network(depth,registered_branch[base_network[depth][area_idx].branch_id],base_network[depth][area_idx].contour)
+                        excluded.append(base_network[depth][area_idx].branch_id)
+                    elif parent_branch_id not in [area.branch_id for area in base_network[depth]]:
+                        print("Parent not present at current depth for "+str(base_network[depth][area_idx].branch_id)+" at depth "+str(depth))
+                        registered_branch[base_network[depth][area_idx].branch_id] = registered_branch[parent_branch_id]
+                        excluded.append(base_network[depth][area_idx].branch_id)
+                        registered_branch[base_network[depth][area_idx].branch_id]
+                        result_network_manager.append_to_network(depth,registered_branch[base_network[depth][area_idx].branch_id],base_network[depth][area_idx].contour)
+                    else:
+                        print("at depth "+str(depth)+" create 2 new branch for parent & child")
+                        new_branch_id = result_network_manager.get_new_branch()
+                        registered_branch[base_network[depth][area_idx].branch_id] = new_branch_id
+                        result_network_manager.append_to_network(depth,registered_branch[base_network[depth][area_idx].branch_id],base_network[depth][area_idx].contour)
+                        new_branch_id = result_network_manager.get_new_branch()
+                        registered_branch[parent_branch_id] = new_branch_id
+                        excluded.append(base_network[depth][area_idx].branch_id)
+                        print(str(base_network[depth][area_idx].branch_id)+" is now "+str(registered_branch[base_network[depth][area_idx].branch_id]))
+                        print(str(parent_branch_id)+" is now "+str(registered_branch[parent_branch_id]))
+            for area_idx in range(len(base_network[depth])):
+                if base_network[depth][area_idx].branch_id not in excluded:
+                    result_network_manager.append_to_network(depth,registered_branch[base_network[depth][area_idx].branch_id],base_network[depth][area_idx].contour)
+        return result_network_manager

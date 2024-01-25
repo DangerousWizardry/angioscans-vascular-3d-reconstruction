@@ -7,20 +7,22 @@ import numpy as np
 def ccw(A,B,C):
     return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
 
-def contour_intersect(cnt_ref,cnt_query):
+def contour_intersect(cnt_ref,cnt_query,DEBUG=False):
 
     ## Contour is a list of points
 
     # Check if contour is included
     if cv2.pointPolygonTest(cnt_ref,cnt_query[0][0].astype(np.uint8),False)>=0:
-        print("included")
+        if DEBUG:
+            print("included")
         return True
 
     # Check if some points are equivalent
     for point_a in cnt_ref:
         for point_b in cnt_query:
             if point_a[0][0] == point_b[0][0] and point_a[0][1] == point_b[0][1]:
-                print("border collapse")
+                if DEBUG:
+                    print("border collapse")
                 return True
 
 
@@ -39,7 +41,8 @@ def contour_intersect(cnt_ref,cnt_query):
             ## Check if line intersect
             if ccw(A,C,D) != ccw(B,C,D) and ccw(A,B,C) != ccw(A,B,D):
                 ## If true, break loop earlier
-                print("border cut")
+                if DEBUG:
+                    print("border cut")
                 return True
 
     return False
