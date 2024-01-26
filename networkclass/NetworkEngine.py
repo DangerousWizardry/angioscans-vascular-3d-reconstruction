@@ -300,12 +300,10 @@ class NetworkEngine:
         result_network_manager = NetworkManager(len(base_network))
         #We register the first branch
         _,depth = network_manager.get_branch(0)
-        new_branch_id = result_network_manager.get_new_branch()
-        registered_branch[base_network[depth][0].branch_id] = new_branch_id
+        registered_branch[base_network[depth][0].branch_id] = 0
         result_network_manager.append_to_network(depth,registered_branch[base_network[depth][0].branch_id],base_network[depth][0].contour)
         
         for depth in reversed(range(len(base_network)-1)):
-            #TODO double loop, first check suspected child, if validated child, exclude parent from standard rebranding
             excluded = list()
             for area_idx in range(len(base_network[depth])):
                 if base_network[depth][area_idx].branch_id not in registered_branch.keys():
@@ -338,4 +336,8 @@ class NetworkEngine:
             for area_idx in range(len(base_network[depth])):
                 if base_network[depth][area_idx].branch_id not in excluded:
                     result_network_manager.append_to_network(depth,registered_branch[base_network[depth][area_idx].branch_id],base_network[depth][area_idx].contour)
+        branch_list = copy.deepcopy(result_network_manager.branch_list)
+        for branch_id in branch_list:
+            if result_network_manager.branch_length[branch_id] < 30:
+                result_network_manager.remove_branch(branch_id)
         return result_network_manager
