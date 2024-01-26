@@ -67,15 +67,15 @@ def regionGrowing(image,point,nested_intensity,mean_radius=-1,alpha=0.60,exclusi
         if contourBoundingWidth > 5 and (contourBoundingWidth > mean_radius * 3 or sum > unrealistic_area):
             if sum > 2000:
                 #Bigger than the abdominal aorta
-                return list()
+                return [],False
             segmented = np.zeros_like(image, dtype=np.uint8)
             cv2.circle(segmented,point,int(mean_radius),255)
             contours, _ = cv2.findContours(segmented, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            return contours[0]
+            return contours[0],True
         # else ok
-        return contours[0]
+        return contours[0],False
     else:
         # print("target was "+str(point))
         # print("targeted intesity was"+str(seed_value))
         # print("not found")
-        return list()
+        return [],False

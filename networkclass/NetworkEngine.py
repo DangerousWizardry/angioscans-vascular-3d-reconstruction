@@ -1,3 +1,4 @@
+import copy
 from functools import partial
 from unittest import result
 
@@ -58,25 +59,27 @@ class NetworkEngine:
             foundTarget = regionSearch(self.image[self.branch_depth[branch_id],:,:],self.network_manager.get_branch_target(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.network_manager.get_nested_intensity(branch_id).get_average()*self.alpha)
             if not isinstance(excluded,type(None)):
                 #Case exploring a newly splitted branch
-                tube_contour = regionGrowing(self.image[self.branch_depth[branch_id],:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta,excluded)
+                tube_contour,predicted = regionGrowing(self.image[self.branch_depth[branch_id],:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta,excluded)
             elif(self.branch_monitored_depth[branch_id]<self.branch_depth[branch_id]):
                 #Case a splitted branch has succeed and we do not want it to merge with parent
                 excluded = list()
                 for area in self.network_manager.network[self.branch_depth[branch_id]]:
                     excluded.append(area.contour)
-                tube_contour = regionGrowing(self.image[self.branch_depth[branch_id],:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta,excluded)
+                tube_contour,predicted = regionGrowing(self.image[self.branch_depth[branch_id],:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta,excluded)
             else:
-                tube_contour = regionGrowing(self.image[self.branch_depth[branch_id],:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta)
+                tube_contour,predicted = regionGrowing(self.image[self.branch_depth[branch_id],:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta)
             if len(tube_contour)==0:
                 self.branch_depth[branch_id] = 0
                 if self.network_manager.branch_length[branch_id] < 20:
                     self.network_manager.remove_branch(branch_id)
                 break
             center, radius = cv2.minEnclosingCircle(tube_contour)
-            self.network_manager.add_label((self.branch_depth[branch_id],center[1],center[0]),
-                                           str(round(radius/self.network_manager.get_mean_radius(branch_id).get_average(),2))+","+
-                                           str(round(self.network_manager.get_mean_radius(branch_id).get_average(),2))+","+
-                                           str(round(self.network_manager.get_nested_intensity(branch_id).get_average(),2)))
+            self.network_manager.add_label((self.branch_depth[branch_id],center[1],center[0]),"Predicted "+str(predicted)+" "+str(branch_id))
+            
+            # self.network_manager.add_label((self.branch_depth[branch_id],center[1],center[0]),
+            #                                str(round(radius/self.network_manager.get_mean_radius(branch_id).get_average(),2))+","+
+            #                                str(round(self.network_manager.get_mean_radius(branch_id).get_average(),2))+","+
+            #                                str(round(self.network_manager.get_nested_intensity(branch_id).get_average(),2)))
             
             if not multi and radius > 3 and self.branch_protected_split[branch_id] > self.branch_depth[branch_id] and (radius < self.network_manager.get_mean_radius(branch_id).get_average()*0.65 
                               or radius/self.network_manager.get_mean_radius(branch_id).get_last() < 0.75):
@@ -133,7 +136,7 @@ class NetworkEngine:
                     #Exploring 20 frames of new branch with a success callback for parent branch
                     self.stack.append([target_2_branch_id,20,exclusion_zone,partial(self.success_split, branch_id, pixel_1,self.branch_depth[branch_id]-20,exclusion_radius)])
                     #In case branch failed we set up parent branch to continue, these data will be rollback if child branch succeed
-                    self.network_manager.append_to_network(self.branch_depth[branch_id],branch_id,tube_contour)
+                    self.network_manager.append_to_network(self.branch_depth[branch_id],branch_id,tube_contour,predicted)
                     self.branch_depth[branch_id]-=1
                     self.network_manager.set_branch_target(branch_id,center)
             
@@ -143,7 +146,7 @@ class NetworkEngine:
                     if self.network_manager.branch_length[branch_id] < 20:
                         self.network_manager.remove_branch(branch_id)
                     break
-                self.network_manager.append_to_network(self.branch_depth[branch_id],branch_id,tube_contour)
+                self.network_manager.append_to_network(self.branch_depth[branch_id],branch_id,tube_contour,predicted)
                 self.branch_depth[branch_id]-=1
                 self.network_manager.set_branch_target(branch_id,center)
                 self.network_manager.get_nested_intensity(branch_id).add_number(self.image[self.branch_depth[branch_id],self.network_manager.get_branch_target(branch_id)[1],self.network_manager.get_branch_target(branch_id)[0]])
@@ -165,7 +168,7 @@ class NetworkEngine:
             print("found target "+str(foundTarget))
             print("debug : avg intensity " + str(self.network_manager.get_nested_intensity(branch_id).get_average()) + " radius "+str(self.network_manager.get_mean_radius(branch_id).get_average()))
             print("target intensity :"+str(self.image[depth,foundTarget[1],foundTarget[0]]))
-            tube_contour = regionGrowing(self.image[depth,:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta)
+            tube_contour,predicted = regionGrowing(self.image[depth,:,:],foundTarget,self.network_manager.get_nested_intensity(branch_id),self.network_manager.get_mean_radius(branch_id).get_average(),self.beta)
             if len(tube_contour) == 0:
                 if self.network_manager.branch_length[branch_id] < 20:
                     self.network_manager.remove_branch(branch_id)
@@ -177,7 +180,7 @@ class NetworkEngine:
                     self.network_manager.remove_branch(branch_id)
                     return 0
                 return self.network_manager.branch_length[branch_id]
-            self.network_manager.append_to_network(depth,branch_id,tube_contour)
+            self.network_manager.append_to_network(depth,branch_id,tube_contour,predicted)
             self.network_manager.set_branch_target(branch_id,center)
             self.network_manager.get_nested_intensity(branch_id).add_number(self.image[depth,self.network_manager.get_branch_target(branch_id)[1],self.network_manager.get_branch_target(branch_id)[0]])
             self.network_manager.get_mean_radius(branch_id).add_number(radius)
@@ -210,6 +213,14 @@ class NetworkEngine:
             self.pbar.set_description("Searching region %s" % str(self.branch_depth))
             self.explore_all()
         return
+
+    def sanitize(self):
+        branch_list = copy.deepcopy(self.network_manager.branch_list)
+        for branch_id in branch_list:
+            if self.network_manager.branch_length[branch_id] < 30:
+                self.network_manager.remove_branch(branch_id)
+            elif self.network_manager.get_predicted_percentage(branch_id) > 0.5:
+                self.network_manager.remove_branch(branch_id)
 
     def merge_network(self,DEBUG=False):
         net = self.network_manager.network
@@ -258,7 +269,7 @@ class NetworkEngine:
                 for key, value in to_merge.items():
                     if len(value) == 0:
                         if nodes[key].branch_id not in merged_branch_list:
-                            result_network_manager.append_to_network(depth,nodes[key].branch_id,nodes[key].contour)
+                            result_network_manager.append_to_network(depth,nodes[key].branch_id,nodes[key].contour,nodes[key].predicted)
                     else:
                         contours_to_merge = [node.contour for index,node in enumerate(nodes) if index in value]
                         contours_to_merge.append(nodes[key].contour)

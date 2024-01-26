@@ -80,6 +80,20 @@ class NetworkManager:
                 if len(branch)>0:
                     break
         return branch,offset
+    
+    def get_predicted_percentage(self,branch_id):
+        predicted_counter = 0
+        found = False
+        for i in reversed(range(len(self.network))):
+            area = next((area for area in self.network[i] if area.branch_id == branch_id),None)
+            if area != None:
+                found = True
+                if area.predicted:
+                    predicted_counter+=1
+            else:
+                if found:
+                    break
+        return predicted_counter/self.branch_length[branch_id]
 
     def get_last_from_branch(self,branch_id):
         for i in range(len(self.network)):
