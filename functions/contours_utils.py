@@ -1,4 +1,5 @@
 
+import math
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
@@ -20,7 +21,9 @@ def contour_intersect(cnt_ref,cnt_query,DEBUG=False):
     # Check if some points are equivalent
     for point_a in cnt_ref:
         for point_b in cnt_query:
-            if point_a[0][0] == point_b[0][0] and point_a[0][1] == point_b[0][1]:
+            if (abs(point_a[0][0] - point_b[0][0]) <= 1 and point_a[0][1] == point_b[0][1]) or (point_a[0][0] == point_b[0][0] and abs(point_a[0][1] - point_b[0][1]) <= 1):
+            #point_a[0][1] == point_b[0][1] and point_a[0][0] == point_b[0][0]:
+            #(abs(point_a[0][0] - point_b[0][0]) <= 1 and point_a[0][1] == point_b[0][1]) or (point_a[0][0] == point_b[0][0] and abs(point_a[0][1] - point_b[0][1]) <= 1):
                 if DEBUG:
                     print("border collapse")
                 return True
@@ -58,8 +61,21 @@ def merge_contours(image,contours_to_merge,debug=False):
         fig = plt.figure(figsize=(10,10))
         cv2.drawContours(canvas, contours,-1, 255,1)
         plt.imshow(canvas)
-        print(len(contours))
     if len(contours) > 0:
+        if len(contours)>1:
+            if debug:
+                print("more than 1 contour detected ("+str(len(contours))+")")
+            areas = [cv2.contourArea(cnt) for cnt in contours]
+            points = list()
+            points = np.vstack(contours)
+            (x, y), (MA, ma), angle = cv2.fitEllipse(points)
+            if np.sum([cv2.contourArea(cnt) for cnt in contours]) * 3 < np.pi * MA * ma:
+                canvas = np.zeros_like(image.astype(np.uint8))
+                cv2.ellipse(canvas,[(x, y), (MA, ma), angle],255)
+                contours, _ = cv2.findContours(canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+                return contours[0]
+            else:
+                return contours[areas.index(max(areas))]
         return contours[0]
     print("Can't merge contours")
     return list()

@@ -126,6 +126,7 @@ class NetworkManager:
         for branch_id in self.branch_list:
             image = np.zeros(shape,dtype=np.uint8)
             branch,offset = self.get_branch(branch_id)
+            print("branch "+str(branch_id)+" start "+str(offset)+" length "+str(len(branch)))
             for area in branch:
                 for point in area.contour:
                     image[offset][point[0][1]][point[0][0]] = 255
@@ -139,3 +140,13 @@ class NetworkManager:
                     image[i][point[0][1]][point[0][0]] = 255
         generated_images.append(image)
         return generated_images
+    
+    def sanitize(self):
+        branch_list = copy.deepcopy(self.branch_list)
+        for branch_id in branch_list:
+            if self.branch_length[branch_id] < 20:
+                self.remove_branch(branch_id)
+                print("Sanitize : remove "+str(branch_id)+" (too short)")
+            elif self.get_predicted_percentage(branch_id) > 0.4:
+                self.remove_branch(branch_id)
+                print("Sanitize : remove "+str(branch_id)+" (predicted)")
