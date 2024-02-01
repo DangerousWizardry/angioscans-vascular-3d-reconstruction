@@ -18,10 +18,11 @@ class NetworkEngine:
         self.branch_depth = [max_depth-1]
         # if a branch has a value < current depth in this array, this branch is monitored until the registered depth to not merge with another one
         self.branch_monitored_depth = [max_depth]
+        # if a branch has a value < current depth in this array, this branch can't split
         self.branch_protected_split = [max_depth]
         self.current_depth = max_depth-1
-        self.alpha = 0.6 #alpha >= beta
-        self.beta = 0.6 #similarity score
+        self.alpha = 0.6 #alpha >= beta used for region search
+        self.beta = 0.6 #similarity score used for region growing
         self.stop_depth = 200
         self.pbar = tqdm(total=max_depth-self.stop_depth)
 
@@ -43,16 +44,18 @@ class NetworkEngine:
                 self.branch_protected_split.append(force_depth)
         return child_id
     
+    # Callback function used in case of split considered as successfull
     def success_split(self,parent_branch,new_target,child_depth,exclusion_radius):
         self.network_manager.set_branch_target(parent_branch,new_target)
         print("SUCCESS SPLIT PARENT "+str(parent_branch))
         self.network_manager.branch_mean_radius[parent_branch] = RunningAverage(exclusion_radius,1,exclusion_radius)
         self.branch_monitored_depth[parent_branch] = child_depth
         self.branch_protected_split[parent_branch] = child_depth
-        #Rollback branch 1 if success
+        #Rollback parent branch if success (cancel last add)
         self.branch_depth[parent_branch]+=1
         self.network_manager.network[self.branch_depth[parent_branch]].remove(next((area for area in self.network_manager.network[self.branch_depth[parent_branch]] if area.branch_id == parent_branch),None))
 
+    # Explore is the core function of the Network engine, it find target in a slice, grows it and check if it's correct + manage vessel splitting
     def explore(self,branch_id,iteration=1,excluded=None,onsuccess=None):
         multi = True if iteration > 1 else False
         for i in range(iteration):
@@ -76,18 +79,14 @@ class NetworkEngine:
             center, radius = cv2.minEnclosingCircle(tube_contour)
             self.network_manager.add_label((self.branch_depth[branch_id],center[1],center[0]),"Predicted "+str(predicted)+" "+str(branch_id))
             
-            # self.network_manager.add_label((self.branch_depth[branch_id],center[1],center[0]),
-            #                                str(round(radius/self.network_manager.get_mean_radius(branch_id).get_average(),2))+","+
-            #                                str(round(self.network_manager.get_mean_radius(branch_id).get_average(),2))+","+
-            #                                str(round(self.network_manager.get_nested_intensity(branch_id).get_average(),2)))
-            
+            #  we check if the branch is not protected from splitting + if there is a constriction on the vessel radius
             if not multi and radius > 3 and self.branch_protected_split[branch_id] > self.branch_depth[branch_id] and (radius < self.network_manager.get_mean_radius(branch_id).get_average()*0.65 
                               or radius/self.network_manager.get_mean_radius(branch_id).get_last() < 0.75):
                 print("Splitted "+str(branch_id)+" because protected until "+str(self.branch_protected_split[branch_id]))
                 print("Found target is "+str(foundTarget)+" radius is "+str(radius))
-                #We suspect a splitted vessel
+                # We suspect a splitted vessel
                 last_radius = self.network_manager.get_mean_radius(branch_id).get_last()
-                #We try to fit an rectangle to get the split orientation
+                # We try to fit an rectangle to get the split orientation
                 tube_contour = self.network_manager.get_last_from_branch(branch_id).contour
                 rect = cv2.minAreaRect(tube_contour)
                 rect_points = cv2.boxPoints(rect).astype(int)
@@ -111,8 +110,7 @@ class NetworkEngine:
                 self.network_manager.append_to_debug(self.branch_depth[branch_id],rect_points.reshape(6,1,2))
 
                 exclusion_radius = max(rect[1])/4 #rect width
-                #x_offset = int(last_radius/2)
-                #pixel_1 = (self.network_manager.get_branch_target(branch_id)[0]-x_offset,self.network_manager.get_branch_target(branch_id)[1])
+     
                 #Build exclusion zone
                 template = np.zeros((self.image.shape[1],self.image.shape[2]),np.uint8)
                 cv2.circle(template,pixel_1,int(exclusion_radius),255)
@@ -127,7 +125,6 @@ class NetworkEngine:
                         self.network_manager.remove_branch(branch_id)
                 else:
                     self.network_manager.append_to_debug(self.branch_depth[branch_id],contours[0])
-                    #pixel_2 = (self.network_manager.get_branch_target(branch_id)[0]+x_offset,self.network_manager.get_branch_target(branch_id)[1])
                     #Creating a new branch with a new target
                     target_2_branch_id = self.get_new_branch(branch_id)
                     print("Create branch id :"+str(target_2_branch_id))
@@ -189,27 +186,26 @@ class NetworkEngine:
         print("Force create branch "+str(branch_id)+" at depth "+str(initial_depth))
 
     def explore_all(self):
-        for i in range(len(self.branch_depth)): 
-            #print(str(self.network_manager.branch_mean_radius[i]))   
+        for i in range(len(self.branch_depth)):  
             if self.branch_depth[i] >= self.current_depth:
                 for j in range(self.branch_depth[i] - self.current_depth + 1):
                     self.stack.extend([[i]])
-        #print()
+
     def run(self):
         self.explore_all()
-        while self.current_depth > self.stop_depth:#1120:
+        while self.current_depth > self.stop_depth:
             while len(self.stack) > 0:
                 exploring_parameters = self.stack.pop()
                 self.explore(*exploring_parameters)
-                #print(str(self.stack)+" : "+str(time.time()))
             self.current_depth -= 1
             self.pbar.update(1)
             self.pbar.set_description("Searching region %s" % str(self.branch_depth))
             self.explore_all()
         return
     
+    # Used to merge branch that are similar and/or intesecting in order to remove redundancy
+    # This function can be widely optimised. For now it could me useful to run in twice to get a better result
     def merge_network(self,network_to_merge,DEBUG=False):
-        #TODO merge branch to parent branch having the greater offset
         net = network_to_merge.network
         offset_list = list()
         for i in range(len(network_to_merge.branch_length)):
@@ -282,17 +278,6 @@ class NetworkEngine:
                                         to_merge[ida].add(local_branch_idb)
                                 if DEBUG:
                                     print(str(nodes[idb].branch_id)+" merged to "+str(nodes[ida].branch_id))
-            # for key, value in to_merge.items():
-            #     if len(value) > 0:
-            #         value_offsets = [offset_list[nodes[idx].branch_id] for idx in value]
-            #         if depth == 1263:
-            #             print(max(value_offsets))
-            #             print(offset_list[key])
-            #         if max(value_offsets) > offset_list[nodes[key].branch_id]:
-            #             parent_branch = list(value)[value_offsets.index(max(value_offsets))]
-            #             to_merge[parent_branch].update(value)
-            #             to_merge[parent_branch].add(key)
-            #             to_merge[key].clear()
 
             for key, value in to_merge.items():
                 if len(value) == 0:
@@ -309,24 +294,17 @@ class NetworkEngine:
                         print("at depth"+str(depth)+" merge "+str(nodes[key].branch_id)+" with"+str(debug_id)+" contour size "+str(cv2.contourArea(contour)))
                     
                     result_network_manager.append_to_network(depth,nodes[key].branch_id,contour)
-        # for branch_id in result_network_manager.branch_list:
-        #     if result_network_manager.branch_length[branch_id] < 30:
-        #         result_network_manager.remove_branch(branch_id)
-        print(offset_list)
+
         return result_network_manager
     
 
     def find_parent_branch(self,contour,areas):
-        #  print("original")
-        #  print(contour)
-        #  print("compare to")
         for area in areas:
-            #  print(area.contour)
             if contour_intersect(contour,area.contour):
                 return area.branch_id
         return False
 
-
+# Used to create one branch for each segment : a bifurcation create 2 new child branch
     def segmentize(self,network_manager):
         registered_branch = dict()
         base_network = network_manager.network
@@ -344,7 +322,7 @@ class NetworkEngine:
                     parent_branch_id = self.find_parent_branch(base_network[depth][area_idx].contour,base_network[depth+1])
                     print(parent_branch_id)
                     if parent_branch_id == False:
-                        #Case branch has been explore from bottom
+                        #Case branch has been explored from bottom
                         print("Can't find parent for "+str(base_network[depth][area_idx].branch_id)+" at depth "+str(depth))
                         new_branch_id = result_network_manager.get_new_branch()
                         registered_branch[base_network[depth][area_idx].branch_id] = new_branch_id

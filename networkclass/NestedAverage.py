@@ -1,6 +1,6 @@
 import copy
 
-
+# This class is used to compute an average value on a variable windows
 class NestedAverage:
     def __init__(self,numbers=list(),limit=10,average=0,count=0):
         self.limit = limit

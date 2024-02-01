@@ -48,9 +48,12 @@ def extract_centroid_first_slice(img):
 
     return(coordinates) 
 
+# From a bottom body angiography, find the knee position given image + bone intensity range
+# Function return depth of the knee and knee contour 
 def find_knee_depth(image,bone_low_range=70,bone_high_range=255):
     depth = len(image)
     canvas = copy.deepcopy(image.astype(np.uint8))
+    # We assume we should find knee in the 1/6 - 3/6 range on a bottom body angiography
     knee_low_index = int(depth/6)
     knee_high_index = int(depth/6 * 3)
     canvas[canvas>bone_high_range] = 0
@@ -58,6 +61,7 @@ def find_knee_depth(image,bone_low_range=70,bone_high_range=255):
     
     object_areas = list()
 
+    # We look for the largest contour in the search range (we search object where width ~= height )
     for i in range(knee_low_index,knee_high_index):
         contours, _ = cv2.findContours(canvas[i], cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         bounding_rects = [cv2.boundingRect(cnt) for cnt in contours]
@@ -78,6 +82,8 @@ def find_knee_depth(image,bone_low_range=70,bone_high_range=255):
     knee_contour = [contours[0],contours[1]]
     return max_area_depth,knee_contour
 
+# This function is useful because arteries are easily segmented from knee position
+# With a given image + knee contours, return arteries positions
 def extract_arteries_position_from_knee(knee_image,knee_contour,low_filter=30):
     extraction_img = copy.deepcopy(knee_image.astype(np.uint8))
     knee_1,knee_2 = knee_contour

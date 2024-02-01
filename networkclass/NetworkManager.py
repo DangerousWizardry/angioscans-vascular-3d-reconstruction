@@ -121,8 +121,6 @@ class NetworkManager:
     #Each subnetwork is a different image
     def generate3DImages(self,shape):
         generated_images = []
-        print(self.branch_list)
-        print(self.branch_length)
         for branch_id in self.branch_list:
             image = np.zeros(shape,dtype=np.uint8)
             branch,offset = self.get_branch(branch_id)
@@ -141,6 +139,7 @@ class NetworkManager:
         generated_images.append(image)
         return generated_images
     
+    # Remove branch that seems inconsistent for a vascular network (length < 20) or that looks like artefact (branch is > 40% predicted)
     def sanitize(self):
         branch_list = copy.deepcopy(self.branch_list)
         for branch_id in branch_list:

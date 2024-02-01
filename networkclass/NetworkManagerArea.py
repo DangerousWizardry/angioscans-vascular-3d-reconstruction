@@ -1,3 +1,5 @@
+
+# Represent a area detected in one slice. This class is used by the NetworkManager
 class NetworkManagerArea:
     def __init__(self,branch_id,contour,predicted):
         self.branch_id = branch_id

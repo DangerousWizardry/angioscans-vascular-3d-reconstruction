@@ -1,6 +1,6 @@
 import copy
 
-
+# This class is used to perform a fast average on a growing-only list
 class RunningAverage:
     def __init__(self,sum=0,count=0,last=None):
         self.sum = sum
